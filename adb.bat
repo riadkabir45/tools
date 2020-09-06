@@ -1,1 +1,0 @@
-@E:\Apps\adb\adb.exe 
