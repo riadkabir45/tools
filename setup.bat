@@ -25,5 +25,5 @@ For /R "%~dp0" %%G IN (*.bat) do call :simpleList "%%G"
 goto end
 
 :simpleList
-
+if [%~n1] NEQ [setup] echo %~n1
 exit /b
