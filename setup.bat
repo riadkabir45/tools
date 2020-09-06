@@ -9,14 +9,14 @@ set command=%*
 echo %command%|find "%~1=">nul
 if %errorlevel% NEQ 0 echo Invalid argements. && goto end
 
-call runtimelib %*>%~dp0/%~1.bat
+call runtimelib %*>"%~dp0/%~1.bat"
 
 :end
 @endlocal
 @exit /b
 
 :delete
-if not exist %~dp0/%~1.bat echo Alias does not exist && goto end
+if not exist "%~dp0/%~1.bat" echo Alias does not exist && goto end
 del /f /q "%~dp0/%~1.bat" 2>nul
 goto end
 
