@@ -1,0 +1,119 @@
+#!/bin/sh
+MBR="256"
+
+adds(){
+    local size=$(($1-$(stat -c%s "$2")))
+    local i=0
+    while [ "$i" -lt "$((size-1))" ]
+    do
+        echo -n " " && i=$((i+1))
+        [ "$((i%100))" = "99" ] && echo "" && i=$((i+1))
+    done>>"$2"
+    echo "">>"$2"
+}
+
+
+modules(){
+cat<<'EOF'
+asset()(
+        i=0
+        while true
+        do
+                i=$((i+1))
+                eval "[ \"$1\" = \"\$ASSET$i\" ] && found=\"true\""
+                [ "$found" = "true" ] && break
+                eval "[ -z \"\$ASSET$i\" ] && break"
+        done
+        [ "$found" = "true" ] && echo "$i"
+)
+cpa()(
+    index=$(asset "$1")
+    [ ! -z "$index" ] && eval "dd if="$0" of="$2" bs=1 count=\$ASIZE$index skip=\$((ASEEK$index+HEAD)) status=none" || echo "Asset $1 not found"
+)
+EOF
+}
+
+header(){
+cat<<ABC
+#!/bin/sh
+HEAD=$HEAD
+ABC
+}
+
+footer(){
+cat<<ABC
+
+exit 0
+
+ABC
+}
+
+gen_assetInfo(){
+    local OIFS=$IFS
+    IFS='
+'
+    [ -e "workdir/tmp/asset" ] && rm "workdir/tmp/asset" 
+    local i=0
+    local seek=0
+    for files in $(find workdir/assets)
+    do
+        if [ ! "$i" = "0" ]
+        then 
+            local sFile=$(basename $files)
+            local iSize=$(stat -c%s $files)
+            echo "ASSET$i=\"$sFile\""
+            echo "ASIZE$i=\"$iSize\""
+            echo "ASEEK$i=\"$seek\""
+            cat $files>>"workdir/tmp/asset"
+            seek=$((seek+$iSize))
+        fi
+        i=$((i+1))
+    done
+    IFS=$OIFS
+}
+
+config(){
+    [ -e "workdir" ] && rm -R workdir 
+    mkdir workdir
+    mkdir workdir/assets
+    mkdir workdir/out
+    mkdir workdir/tmp
+    echo "# This script will be sourced to be executed">workdir/init
+    exit 0
+}
+
+build(){
+    gen_assetInfo>workdir/tmp/asset.info
+    modules>workdir/tmp/modules
+    footer>workdir/tmp/footer
+    HEAD=$(($MBR+$(stat -c%s "workdir/tmp/asset.info")+\
+        $(stat -c%s "workdir/tmp/modules")+\
+        $(stat -c%s "workdir/init")+\
+        $(stat -c%s "workdir/tmp/footer")))
+    header>workdir/tmp/hedder
+    adds $MBR workdir/tmp/hedder
+    cat workdir/tmp/hedder>workdir/out/script.sh
+    cat workdir/tmp/asset.info>>workdir/out/script.sh
+    cat workdir/tmp/modules>>workdir/out/script.sh
+    cat workdir/init>>workdir/out/script.sh
+    cat workdir/tmp/footer>>workdir/out/script.sh
+    cat workdir/tmp/asset>>workdir/out/script.sh
+    rm workdir/tmp/*
+    exit 0
+}
+
+help(){
+cat<<EOF
+Usage: sfxsh OPTION
+Creates a script with files embeded. Only dependency is sh and dd.
+
+  configure       Creates a workdir,
+  build           Builds the workdir to script
+
+EOF
+}
+
+
+[ "$1" = "configure" ] && config
+[ "$1" = "build" ] && build
+help
