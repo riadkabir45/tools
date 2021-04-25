@@ -28,7 +28,7 @@ asset()(
 )
 cpa()(
     index=$(asset "$1")
-    [ ! -z "$index" ] && eval "dd if="$0" of="$2" bs=1 count=\$ASIZE$index skip=\$((ASEEK$index+HEAD)) status=none" || echo "Asset $1 not found"
+    [ ! -z "$index" ] && eval "dd if="$0" iflag=skip_bytes of="$2" bs=\$ASIZE$index count=1 skip=\$((ASEEK$index+HEAD)) status=none" || echo "Asset $1 not found"
 )
 EOF
 }
