@@ -1,0 +1,90 @@
+#!/system/bin/sh
+
+PATH=/system/bin:/system/xbin
+
+houdini_bin=0
+dest_dir=/system/lib$1/arm$1
+binfmt_misc_dir=/proc/sys/fs/binfmt_misc
+
+if [ -z "$1" ]; then
+	if [ "`uname -m`" = "x86_64" ]; then
+		v=7_y
+		url=http://dl.android-x86.org/houdini/7_y/houdini.sfs
+	else
+		v=7_x
+		url=http://dl.android-x86.org/houdini/7_x/houdini.sfs
+	fi
+else
+	v=7_z
+	url=http://dl.android-x86.org/houdini/7_z/houdini.sfs
+fi
+
+if [ -s /system/lib$1/libhoudini.so ]; then
+	log -pi -thoudini "found /system/lib$1/libhoudini.so"
+elif [ -e /system/etc/houdini$v.sfs ]; then
+	mount /system/etc/houdini$v.sfs $dest_dir
+else
+	if mountpoint -q $dest_dir; then
+		kill -9 `fuser -m $dest_dir`
+		umount -f $dest_dir
+	fi
+	mkdir -p /data/arm
+	cd /data/arm
+	while ! mount houdini$v.sfs $dest_dir; do
+		while [ "$(getprop net.dns1)" = "" ]; do
+			sleep 10
+		done
+		wget $url -cO houdini$v.sfs && continue
+		rm -f houdini$v.sfs
+		sleep 30
+	done
+fi
+
+mkdir -p $dest_dir/testdir 2> /dev/null
+if ! [ $? -eq 0 ]; then
+[ -d /system/tmp/lib$1 ] &&  rm -r /system/tmp/lib$1
+mkdir -p /system/tmp/lib$1
+cp -rp $dest_dir/*  /system/tmp/lib$1/
+umount  $dest_dir
+rm -r  $dest_dir
+mv  /system/tmp/lib$1  $dest_dir
+chmod -R 777 $dest_dir
+else
+rmdir $dest_dir/testdir
+fi
+
+[ -s /system/lib$1/libhoudini.so ] || mount --bind $dest_dir/libhoudini.so /system/lib$1/libhoudini.so
+
+# this is to add the supported binary formats via binfmt_misc
+
+if [ ! -e $binfmt_misc_dir/register ]; then
+	mount -t binfmt_misc none $binfmt_misc_dir
+fi
+
+cd $binfmt_misc_dir
+if [ -e register ]; then
+	[ -e /system/bin/houdini$1 ] && dest_dir=/system/bin
+	# register Houdini for arm binaries
+	if [ -z "$1" ]; then
+		echo ':arm_exe:M::\\x7f\\x45\\x4c\\x46\\x01\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x02\\x00\\x28::'"$dest_dir/houdini:P" > register
+		echo ':arm_dyn:M::\\x7f\\x45\\x4c\\x46\\x01\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x03\\x00\\x28::'"$dest_dir/houdini:P" > register
+	else
+		echo ':arm64_exe:M::\\x7f\\x45\\x4c\\x46\\x02\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x02\\x00\\xb7::'"$dest_dir/houdini64:P" > register
+		echo ':arm64_dyn:M::\\x7f\\x45\\x4c\\x46\\x02\\x01\\x01\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x03\\x00\\xb7::'"$dest_dir/houdini64:P" > register
+	fi
+	if [ -e arm${1}_exe ]; then
+		houdini_bin=1
+	fi
+else
+	log -pe -thoudini "No binfmt_misc support"
+fi
+
+if [ $houdini_bin -eq 0 ]; then
+	log -pe -thoudini "houdini$1 enabling failed!"
+else
+	log -pi -thoudini "houdini$1 enabled"
+fi
+
+[ "$(getprop ro.zygote)" = "zygote64_32" -a -z "$1" ] && exec $0 64
+
+exit 0
