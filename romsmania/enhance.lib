@@ -1,0 +1,17 @@
+regex(){
+  [ ! "$#" = "2" ] && exit 0
+  data=$(echo "$1" | grep -oE "$2")
+  [ "$data" = "$1" ] && return 0
+  return 1
+}
+
+iterate(){
+  i="$1"
+  while [ "$i" -le "$2" ]
+  do
+    echo -n "$i "
+    i=$((i+1))
+  done
+  echo ""
+}
+
